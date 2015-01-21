@@ -1,0 +1,28 @@
+{
+  "name": "s3-download-stream",
+  "version": "1.0.0",
+  "description": "this module helps multipart downloads from s3",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/achillessin/s3-download-stream.git"
+  },
+  "keywords": [
+    "s3",
+    "multipart",
+    "download"
+  ],
+  "author": "achillessin",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/achillessin/s3-download-stream/issues"
+  },
+  "homepage": "https://github.com/achillessin/s3-download-stream",
+  "dependencies": {
+    "async": "^0.9.0",
+    "util": "^0.10.3"
+  }
+}
