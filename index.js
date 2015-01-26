@@ -1,9 +1,8 @@
 var assert = require('assert');
 var async = require('async');
-var EventEmitter = require('events').EventEmitter;
-var util = require('util');
+var Readable = require('stream').Readable;
 
-// Set the S3 client to be used for this upload.
+// Set the S3 client to be used for this download.
 function Client(client) {
     if (this instanceof Client === false) {
         return new Client(client);
@@ -18,53 +17,90 @@ function Client(client) {
 
 Client.prototype.download = function(destinationDetails, sessionDetails) {
     var cachedClient = this.cachedClient;
+    var e = new events.EventEmitter();
 
     if (!sessionDetails) sessionDetails = {};
 
-    var self = this;
-    var _maxPartSize = 1024*1024*5; //5MB
-    var _concurrentStreams = 5;
-    var _maxRetries = 3;
-    var _params = null;
+    // Create the writable stream interface.
+    var rs = new Readable({
+        highWaterMark: 4194304 // 4 MB
+    });
 
-    self.maxPartSize = function(size){
-        _maxPartSize = size;
+    //variables pertaining to the download.
+    var _maxPartSize = sessionDetails.maxPartSize ? sessionDetails.maxPartSize : 1024*1024*5; //5MB
+    var _concurrentStreams = sessionDetails.concurrentStreams ? sessionDetails.concurrentStreams : 5;
+    var _maxRetries = sessionDetails.maxRetries ? sessionDetails.maxRetries : 3;
+    var _totalObjectSize = sessionDetails.totalObjectSize ? sessionDetails.totalObjectSize : 0;
+    var _params = destinationDetails;
+
+    //state management
+    var started = false;
+    var paused = false;
+    var downloading = false;
+
+    rs.maxPartSize = function(partSize){
+        if(partSize < 1024*1024*5)
+            partSize = 1024*1024*5;
+        _maxPartSize = partSize;
+        return rs;
     }
-    self.concurrentStreams = function(numStreams) {
+    rs.getMaxPartSize = function() {
+        return _maxPartSize;
+    }
+    rs.concurrentStreams = function(numStreams) {
+        if(numStreams <1 ) {
+            numStreams = 1;
+        }
         _concurrentStreams = numstreams;
+        return rs;
     }
-    self.maxRetries = function(numRetries) {
+    rs.getConcurrentStreams = function() {
+        return _concurrentStreams;
+    }
+    rs.maxRetries = function(numRetries) {
         _maxRetries = numRetries;
+        return rs;
     }
-    self.params = function(params){
-        _params = params;
+    rs.getMaxRetries = function() {
+        return _maxRetries;
     }
-    self.download = function(filestream,size) {
+    rs.totalObjectSize = function(size) {
+        _totalObjectSize = size;
+        return rs;
+    }
+    rs.getTotalObjectSize = function() {
+        return _totalObjectSize;
+    }
+
+    self._read = function() {
+        if ( downloading ) return;
+
+        downloading = true;
+
+        assert.notStrictEqual(_totalObjectSize,0,"'totalObjectSize' parameter is required.");
+        assert.notStrictEqual(_params,null,"'destinationDetails' parameter is required.");
+
         var bytesDownloaded = 0;
         var functionArray = [];
-
-        assert.notStrictEqual(size,null,"'size' parameter is required.");
-        assert.notStrictEqual(filestream,null,"'filestream' parameter is required.");
-        assert.notStrictEqual(_params,null,"'params' parameter is required.");
-
-        while(bytesDownloaded < size) {
+        while(bytesDownloaded < _totalObjectSize) {
             var func = function(callback){
-                downloadConcurrentParts(filestream,this.offset,size,callback);
+                downloadConcurrentParts(this.offset,callback);
             };
-            functionArray.push(async.retry(_maxretries,func.bind({offset: bytesDownloaded})));
+            functionArray.push(async.retry(_maxRetries,func.bind({offset: bytesDownloaded})));
             bytesDownloaded += _concurrentStreams * _maxPartSize;
         }
 
         async.series(functionArray, function(err,results){
-            filestream.end();
+            rs.push(null);
+            downloading = false;
             if(err){
-                self.emit('error',err);
+                rs.emit('error',err);
             } else {
-                self.emit('downloaded',results);
+                rs.emit('downloaded',results);
             }
         });
-    }
-    var downloadConcurrentParts = function(filestream,offset,maxupperboundplusone,callback){
+    };
+    var downloadConcurrentParts = function(offset,callback){
         var functionArray = [];
         var lowerBoundArray = [];
         var upperBoundArray = [];
@@ -72,21 +108,21 @@ Client.prototype.download = function(destinationDetails, sessionDetails) {
 
         for(var i=0;i<_concurrentStreams;i++){
             lowerBoundArray.push( i * _maxPartSize + offset );
-            upperBoundArray.push( Math.min( lowerBoundArray[i] + _maxPartSize-1, maxupperboundplusone-1 ) );
+            upperBoundArray.push( Math.min( lowerBoundArray[i] + _maxPartSize-1, _totalObjectSize-1 ) );
             bytesToDownload += upperBoundArray[i] - lowerBoundArray[i] + 1;
             var paramsCopy = JSON.parse(JSON.stringify(_params));
 
             var func = function(cb){
                 var context = this;
-                context.params.Range = "bytes="+this.lowerBound+"-"+this.upperBound;
+                context.params.Range = "bytes="+context.lowerBound+"-"+context.upperBound;
                 _s3client.getObject(context.params, function(err, data){
-                    self.emit('part',context.upperBound - context.lowerBound);
+                    rs.emit('part',context.upperBound - context.lowerBound);
                     cb(err,data);
                 });
-            }
+            };
             functionArray.push(async.retry(_maxRetries, func.bind({upperBound:upperBoundArray[i],lowerBound:lowerBoundArray[i],params:paramsCopy})));
 
-            if(upperBoundArray[i] >= maxupperboundplusone-1)
+            if(upperBoundArray[i] >= _totalObjectSize-1)
                 break;
         }
         async.parallel(functionArray,function(err,results){
@@ -94,15 +130,13 @@ Client.prototype.download = function(destinationDetails, sessionDetails) {
                 callback(err);
             } else {
                 for(var i=0;i<results.length;i++){
-                    filestream.write(results[i].Body);
+                    rs.push(results[i].Body);
                 }
                 callback(null,"written range"+results[i].Range+" to file");
             }
         });
     }
 };
-util.inherits(s3_download_stream, EventEmitter);
-
 
 Client.globalClient = null;
 
