@@ -136,6 +136,7 @@ Client.prototype.download = function(destinationDetails, sessionDetails) {
             }
         });
     }
+    return rs;
 };
 
 Client.globalClient = null;
