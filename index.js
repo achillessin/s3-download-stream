@@ -1,5 +1,6 @@
 var assert = require('assert');
 var async = require('async');
+var events = require('events');
 var Readable = require('stream').Readable;
 
 // Set the S3 client to be used for this download.
@@ -43,36 +44,36 @@ Client.prototype.download = function(destinationDetails, sessionDetails) {
             partSize = 1024*1024*5;
         _maxPartSize = partSize;
         return rs;
-    }
+    };
     rs.getMaxPartSize = function() {
         return _maxPartSize;
-    }
+    };
     rs.concurrentStreams = function(numStreams) {
         if(numStreams <1 ) {
             numStreams = 1;
         }
         _concurrentStreams = numstreams;
         return rs;
-    }
+    };
     rs.getConcurrentStreams = function() {
         return _concurrentStreams;
-    }
+    };
     rs.maxRetries = function(numRetries) {
         _maxRetries = numRetries;
         return rs;
-    }
+    };
     rs.getMaxRetries = function() {
         return _maxRetries;
-    }
+    };
     rs.totalObjectSize = function(size) {
         _totalObjectSize = size;
         return rs;
-    }
+    };
     rs.getTotalObjectSize = function() {
         return _totalObjectSize;
-    }
+    };
 
-    self._read = function() {
+    rs._read = function() {
         if ( downloading ) return;
 
         downloading = true;
@@ -115,7 +116,7 @@ Client.prototype.download = function(destinationDetails, sessionDetails) {
             var func = function(cb){
                 var context = this;
                 context.params.Range = "bytes="+context.lowerBound+"-"+context.upperBound;
-                _s3client.getObject(context.params, function(err, data){
+                cachedClient.getObject(context.params, function(err, data){
                     rs.emit('part',context.upperBound - context.lowerBound);
                     cb(err,data);
                 });
@@ -132,10 +133,11 @@ Client.prototype.download = function(destinationDetails, sessionDetails) {
                 for(var i=0;i<results.length;i++){
                     rs.push(results[i].Body);
                 }
-                callback(null,"written range"+results[i].Range+" to file");
+                callback(null,"");
             }
         });
-    }
+    };
+    return rs;
 };
 
 Client.globalClient = null;
