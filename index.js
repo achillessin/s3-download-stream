@@ -35,8 +35,6 @@ Client.prototype.download = function(destinationDetails, sessionDetails) {
     var _params = destinationDetails;
 
     //state management
-    var started = false;
-    var paused = false;
     var downloading = false;
 
     rs.maxPartSize = function(partSize){
