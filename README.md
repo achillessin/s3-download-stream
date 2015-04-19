@@ -1,4 +1,4 @@
-# s3-download-stream
+# s3-download
 A pipeable read stream which downloads from Amazon S3 using multipart downloads.
 
 ```js
@@ -20,7 +20,7 @@ var sessionParams = {
     maxRetries: ,//default 3
     totalObjectSize: //required size of object being downloaded
 }
-var downloader = require('s3-download-stream')(s3client);
+var downloader = require('s3-download')(s3client);
 
 var d = downloader.download(params,sessionParams);
 d.on('error',function(err){
@@ -54,7 +54,7 @@ The download() function returns a read stream which can then be piped to other s
 ### Installation
 
 ```
-npm install s3-download-stream
+npm install s3-download
 ```
 ### License
 

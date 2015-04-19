@@ -1,5 +1,5 @@
 {
-  "name": "s3-download-stream",
+  "name": "s3-download",
   "version": "1.0.0",
   "description": "this module helps multipart downloads from s3",
   "main": "index.js",
